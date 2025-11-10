@@ -1,0 +1,10 @@
+services:
+  feedo-rss:
+    build: .
+    container_name: feedo-rss
+    restart: unless-stopped
+    volumes:
+      - ./config.ts:/app/config.ts:ro
+      - ./data:/app/data
+    env_file:
+      - .env

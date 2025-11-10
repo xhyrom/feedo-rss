@@ -1,0 +1,22 @@
+{
+  "name": "feedo-rss",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "NODE_ENV=production bun src/index.ts",
+    "format:check": "prettier . --check",
+    "format:apply": "prettier . --write"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node-cron": "^3.0.11",
+    "prettier": "^3.6.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "node-cron": "^4.2.1",
+    "rss-parser": "^3.13.0"
+  }
+}

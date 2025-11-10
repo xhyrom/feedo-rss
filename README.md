@@ -1,0 +1,1 @@
+**feedo-rss** is a lightweight RSS feed monitor that automatically sends new items to webhooks. Perfect for staying updated on blogs, news feeds, or any RSS source by routing updates to Discord, Slack, Teams, or any webhook-compatible service.

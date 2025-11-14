@@ -73,8 +73,13 @@ export const feeds = [
       {
         url: process.env.ZSSK_MIMORIADNE_WEBHOOK,
         payload: (data) => {
-          const allLines = data.description.split("\n").filter(line => line.trim() !== "");
-          const lines = allLines.filter(line => !["Vlak", "Meškanie", "Dôvod"].includes(line.trim()));
+          const allLines = data.description
+            .split("\n")
+            .filter((line) => line.trim() !== "");
+
+          const lines = allLines.filter(
+            (line) => !["Vlak", "Meškanie", "Dôvod"].includes(line.trim()),
+          );
 
           const trains = [];
           let currentTrain = null;
@@ -83,26 +88,35 @@ export const feeds = [
 
           for (const line of lines) {
             const trimmedLine = line.trim();
-            const trainMatch = trimmedLine.match(/^((Os|R|Ex|EC|REX|RR|IC)\s+\d+\s*\([^)]+\))/);
+            const trainMatch = trimmedLine.match(
+              /^((Os|R|Ex|EC|REX|RR|IC)\s+\d+\s*\([^)]+\))/,
+            );
 
             if (trainMatch) {
               if (currentTrain) trains.push(currentTrain);
 
               currentTrain = {
-                trainInfo: trainMatch[1].trim(),
+                trainInfo: trainMatch[1]!.trim(),
                 delayInfo: "",
                 reasonInfo: "",
                 otherInfo: "",
                 isCancelled: false,
                 hasDelay: false,
-                isInfo: false
+                isInfo: false,
               };
 
-              const restOfLine = trimmedLine.substring(trainMatch[0].length).trim();
+              const restOfLine = trimmedLine
+                .substring(trainMatch[0].length)
+                .trim();
               if (restOfLine) {
-                if (restOfLine.includes("mešká") || restOfLine.includes("predpoklad") || restOfLine.includes("odrieknutý")) {
+                if (
+                  restOfLine.includes("mešká") ||
+                  restOfLine.includes("predpoklad") ||
+                  restOfLine.includes("odrieknutý")
+                ) {
                   currentTrain.delayInfo = restOfLine;
-                  if (restOfLine.includes("odrieknutý")) currentTrain.isCancelled = true;
+                  if (restOfLine.includes("odrieknutý"))
+                    currentTrain.isCancelled = true;
                   else currentTrain.hasDelay = true;
                 } else {
                   currentTrain.otherInfo = restOfLine;
@@ -110,18 +124,33 @@ export const feeds = [
                 }
               }
             } else if (currentTrain) {
-              if ((trimmedLine.includes("mešká") || trimmedLine.includes("predpoklad") || trimmedLine.includes("odrieknutý")) && !currentTrain.delayInfo) {
+              if (
+                (trimmedLine.includes("mešká") ||
+                  trimmedLine.includes("predpoklad") ||
+                  trimmedLine.includes("odrieknutý")) &&
+                !currentTrain.delayInfo
+              ) {
                 currentTrain.delayInfo = trimmedLine;
-                if (trimmedLine.includes("odrieknutý")) currentTrain.isCancelled = true;
+                if (trimmedLine.includes("odrieknutý"))
+                  currentTrain.isCancelled = true;
                 else currentTrain.hasDelay = true;
-              } else if ((trimmedLine.includes("mešká pre") || trimmedLine.includes("V dôsledku")) && !currentTrain.reasonInfo) {
+              } else if (
+                (trimmedLine.includes("mešká pre") ||
+                  trimmedLine.includes("V dôsledku")) &&
+                !currentTrain.reasonInfo
+              ) {
                 currentTrain.reasonInfo = trimmedLine;
               } else if (!currentTrain.otherInfo) {
                 currentTrain.otherInfo = trimmedLine;
-                if (!currentTrain.hasDelay && !currentTrain.isCancelled) currentTrain.isInfo = true;
+                if (!currentTrain.hasDelay && !currentTrain.isCancelled)
+                  currentTrain.isInfo = true;
               }
             } else {
-              if (trimmedLine.includes("mešká pre") || trimmedLine.includes("V dôsledku")) commonReason = trimmedLine;
+              if (
+                trimmedLine.includes("mešká pre") ||
+                trimmedLine.includes("V dôsledku")
+              )
+                commonReason = trimmedLine;
               else commonInfo = trimmedLine;
             }
           }
@@ -132,7 +161,8 @@ export const feeds = [
           const embeds = [];
 
           for (const train of trains) {
-            if (commonReason && !train.reasonInfo) train.reasonInfo = commonReason;
+            if (commonReason && !train.reasonInfo)
+              train.reasonInfo = commonReason;
             if (commonInfo && !train.otherInfo) {
               train.otherInfo = commonInfo;
               if (!train.hasDelay && !train.isCancelled) train.isInfo = true;
@@ -142,29 +172,52 @@ export const feeds = [
             let embedTitle;
 
             if (train.isCancelled) {
-              embedColor = 0xFF0000;
-              embedTitle = "🔴 Zrušený vlak ZSSK";
+              embedColor = 0xff0000;
+              embedTitle = "🔴 Zrušený vlak";
             } else if (train.hasDelay) {
-              embedColor = 0xFFA500;
-              embedTitle = "🟠 Meškanie ZSSK";
+              embedColor = 0xffa500;
+              embedTitle = "🟠 Meškanie vlaku";
             } else {
-              embedColor = 0x1DA1F2;
-              embedTitle = "🔔 Informácia ZSSK";
+              embedColor = 0x1da1f2;
+              embedTitle = "🔔 Informácia";
             }
 
             const fields = [];
 
-            if (train.trainInfo) fields.push({ name: "🚂 Vlak", value: `**${train.trainInfo}**`, inline: false });
+            if (train.trainInfo)
+              fields.push({
+                name: "🚂 Vlak",
+                value: `**${train.trainInfo}**`,
+                inline: true,
+              });
 
             if (train.delayInfo) {
               let formattedDelay = train.delayInfo;
               const delayMatch = train.delayInfo.match(/(\d+)\s*minút/);
-              if (delayMatch) formattedDelay = train.delayInfo.replace(/(\d+)\s*minút/, `**${delayMatch[1]} minút**`);
-              fields.push({ name: "⏰ Meškanie", value: formattedDelay, inline: false });
+              if (delayMatch)
+                formattedDelay = train.delayInfo.replace(
+                  /(\d+)\s*minút/,
+                  `**${delayMatch[1]} minút**`,
+                );
+              fields.push({
+                name: "⏰ Meškanie",
+                value: formattedDelay,
+                inline: true,
+              });
             }
 
-            if (train.reasonInfo) fields.push({ name: "📋 Dôvod", value: `*${train.reasonInfo}*`, inline: false });
-            if (train.otherInfo) fields.push({ name: "ℹ️ Informácia", value: `> ${train.otherInfo}`, inline: false });
+            if (train.reasonInfo)
+              fields.push({
+                name: "📋 Dôvod",
+                value: `*${train.reasonInfo}*`,
+                inline: false,
+              });
+            if (train.otherInfo)
+              fields.push({
+                name: "ℹ️ Informácia",
+                value: `> ${train.otherInfo}`,
+                inline: false,
+              });
 
             if (fields.length > 0) {
               embeds.push({
@@ -172,8 +225,8 @@ export const feeds = [
                 color: embedColor,
                 url: data.link,
                 fields: fields,
-                footer: { text: "Mastodon RSS Feed" },
-                timestamp: new Date().toISOString(),
+                footer: { text: "Mastodon" },
+                timestamp: data.timestamp.toISOString(),
               });
             }
           }
@@ -189,14 +242,10 @@ export const feeds = [
       },
     ],
     fetch: (item: Item) => {
-      const relevantKeywords = [
-        "vlak", "mešká", "odrieknutý", "Os ", "R ", "Ex ", "IC ", "EC ", "REX ", 
-        "upozorňujeme cestujúcich", "reštauračný vozeň", "výluka"
-      ];
-
       return {
-        description: item.contentSnippet,
-        link: item.link,
+        timestamp: new Date(item.pubDate!),
+        description: item.contentSnippet!,
+        link: item.link!,
       };
     },
     latest: async (item: Item, mark: boolean) => {
@@ -204,5 +253,5 @@ export const feeds = [
       if (mark) await markAsSent("zssk", item.guid!);
       return true;
     },
-  })
+  }),
 ];

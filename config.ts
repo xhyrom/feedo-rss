@@ -73,168 +73,137 @@ export const feeds = [
       {
         url: process.env.ZSSK_MIMORIADNE_WEBHOOK,
         payload: (data) => {
-          const allLines = data.description
+          const lines = data.description
             .split("\n")
-            .filter((line) => line.trim() !== "");
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0);
 
-          const lines = allLines.filter(
-            (line) => !["Vlak", "Meškanie", "Dôvod"].includes(line.trim()),
-          );
+          const trainRegex =
+            /^((?:Os|R|Ex|EC|REX|RR|IC|EN|SC)\s+\d+\s*\([^)]+\))/;
+          const delayRegex = /(\d+\s*min(?:\.|út)?)/i;
 
-          const trains = [];
-          let currentTrain = null;
-          let commonReason = "";
-          let commonInfo = "";
+          const trainLines = [];
+          const commonInfoLines = [];
+          const embeds = [];
 
           for (const line of lines) {
-            const trimmedLine = line.trim();
-            const trainMatch = trimmedLine.match(
-              /^((Os|R|Ex|EC|REX|RR|IC)\s+\d+\s*\([^)]+\))/,
-            );
-
-            if (trainMatch) {
-              if (currentTrain) trains.push(currentTrain);
-
-              currentTrain = {
-                trainInfo: trainMatch[1]!.trim(),
-                delayInfo: "",
-                reasonInfo: "",
-                otherInfo: "",
-                isCancelled: false,
-                hasDelay: false,
-                isInfo: false,
-              };
-
-              const restOfLine = trimmedLine
-                .substring(trainMatch[0].length)
-                .trim();
-              if (restOfLine) {
-                if (
-                  restOfLine.includes("mešká") ||
-                  restOfLine.includes("predpoklad") ||
-                  restOfLine.includes("odrieknutý")
-                ) {
-                  currentTrain.delayInfo = restOfLine;
-                  if (restOfLine.includes("odrieknutý"))
-                    currentTrain.isCancelled = true;
-                  else currentTrain.hasDelay = true;
-                } else {
-                  currentTrain.otherInfo = restOfLine;
-                  currentTrain.isInfo = true;
-                }
-              }
-            } else if (currentTrain) {
-              if (
-                (trimmedLine.includes("mešká") ||
-                  trimmedLine.includes("predpoklad") ||
-                  trimmedLine.includes("odrieknutý")) &&
-                !currentTrain.delayInfo
-              ) {
-                currentTrain.delayInfo = trimmedLine;
-                if (trimmedLine.includes("odrieknutý"))
-                  currentTrain.isCancelled = true;
-                else currentTrain.hasDelay = true;
-              } else if (
-                (trimmedLine.includes("mešká pre") ||
-                  trimmedLine.includes("V dôsledku")) &&
-                !currentTrain.reasonInfo
-              ) {
-                currentTrain.reasonInfo = trimmedLine;
-              } else if (!currentTrain.otherInfo) {
-                currentTrain.otherInfo = trimmedLine;
-                if (!currentTrain.hasDelay && !currentTrain.isCancelled)
-                  currentTrain.isInfo = true;
-              }
+            if (trainRegex.test(line)) {
+              trainLines.push(line);
             } else {
-              if (
-                trimmedLine.includes("mešká pre") ||
-                trimmedLine.includes("V dôsledku")
-              )
-                commonReason = trimmedLine;
-              else commonInfo = trimmedLine;
+              commonInfoLines.push(line);
             }
           }
 
-          if (currentTrain) trains.push(currentTrain);
-          if (trains.length === 0) return null;
+          if (trainLines.length === 0 && commonInfoLines.length > 0) {
+            const description = commonInfoLines.join("\n");
+            const allText = description.toLowerCase();
+            let color = 0x1da1f2; // Blue
+            let title = "🔔 Informácia";
 
-          const embeds = [];
-
-          for (const train of trains) {
-            if (commonReason && !train.reasonInfo)
-              train.reasonInfo = commonReason;
-            if (commonInfo && !train.otherInfo) {
-              train.otherInfo = commonInfo;
-              if (!train.hasDelay && !train.isCancelled) train.isInfo = true;
+            if (allText.includes("odrieknutý")) {
+              color = 0xff0000;
+              title = "🔴 Odrieknutý vlak";
+            } else if (allText.includes("mešká")) {
+              color = 0xffa500;
+              title = "🟠 Meškanie vlaku";
             }
 
-            let embedColor;
-            let embedTitle;
+            embeds.push({
+              title,
+              color,
+              description,
+              url: data.link,
+              footer: { text: "ZSSK Mimoriadne • Mastodon" },
+              timestamp: data.timestamp.toISOString(),
+            });
+          } else {
+            const commonInfoText =
+              commonInfoLines.length > 0
+                ? `> ${commonInfoLines.join("\n> ")}`
+                : "";
 
-            if (train.isCancelled) {
-              embedColor = 0xff0000;
-              embedTitle = "🔴 Zrušený vlak";
-            } else if (train.hasDelay) {
-              embedColor = 0xffa500;
-              embedTitle = "🟠 Meškanie vlaku";
-            } else {
-              embedColor = 0x1da1f2;
-              embedTitle = "🔔 Informácia";
-            }
+            for (const trainLine of trainLines) {
+              const match = trainLine.match(trainRegex)!;
+              const trainName = match[1]!.trim();
+              let status = trainLine.substring(match[0].length).trim();
+              if (!status) status = "Očakávajte ďalšie informácie.";
 
-            const fields = [];
+              const fullText = trainLine.toLowerCase();
+              let color = 0x1da1f2;
+              let title = "🔔 Informácia o vlaku";
 
-            if (train.trainInfo)
-              fields.push({
-                name: "🚂 Vlak",
-                value: `**${train.trainInfo}**`,
-                inline: true,
-              });
+              if (fullText.includes("odrieknutý")) {
+                color = 0xff0000;
+                title = "🔴 Odrienknutý vlak";
+              } else if (fullText.includes("mešká")) {
+                color = 0xffa500;
+                title = "🟠 Meškanie vlaku";
+              }
 
-            if (train.delayInfo) {
-              let formattedDelay = train.delayInfo;
-              const delayMatch = train.delayInfo.match(/(\d+)\s*minút/);
-              if (delayMatch)
-                formattedDelay = train.delayInfo.replace(
-                  /(\d+)\s*minút/,
-                  `**${delayMatch[1]} minút**`,
-                );
-              fields.push({
-                name: "⏰ Meškanie",
-                value: formattedDelay,
-                inline: true,
-              });
-            }
+              const fields = [];
+              const delayMatch = status.match(delayRegex);
 
-            if (train.reasonInfo)
-              fields.push({
-                name: "📋 Dôvod",
-                value: `*${train.reasonInfo}*`,
-                inline: false,
-              });
-            if (train.otherInfo)
-              fields.push({
-                name: "ℹ️ Informácia",
-                value: `> ${train.otherInfo}`,
-                inline: false,
-              });
+              if (delayMatch) {
+                fields.push({
+                  name: `🚂 Vlak`,
+                  value: `**${trainName}**`,
+                  inline: true,
+                });
+                fields.push({
+                  name: `⏰ Meškanie`,
+                  value: `**${delayMatch[0]}**`,
+                  inline: true,
+                });
 
-            if (fields.length > 0) {
+                const remainingStatus = status.replace(delayRegex, "").trim();
+                if (remainingStatus) {
+                  fields.push({
+                    name: `📝 Stav`,
+                    value: remainingStatus,
+                    inline: false,
+                  });
+                }
+              } else {
+                fields.push({
+                  name: `🚂 Vlak`,
+                  value: `**${trainName}**`,
+                  inline: false,
+                });
+                fields.push({
+                  name: `📝 Stav`,
+                  value: status,
+                  inline: false,
+                });
+              }
+
+              if (commonInfoText) {
+                fields.push({
+                  name: "ℹ️ Spoločné informácie",
+                  value: commonInfoText,
+                  inline: false,
+                });
+              }
+
               embeds.push({
-                title: embedTitle,
-                color: embedColor,
+                title,
+                color,
                 url: data.link,
-                fields: fields,
-                footer: { text: "Mastodon" },
+                fields,
+                footer: { text: "ZSSK Mimoriadne • Mastodon" },
                 timestamp: data.timestamp.toISOString(),
               });
             }
           }
 
-          if (embeds.length === 0) return null;
+          if (embeds.length === 0) {
+            return {
+              content: `${data.description}\n\n<@&1437202276392501369>`,
+              allowed_mentions: { roles: ["1437202276392501369"] },
+            };
+          }
 
           return {
-            embeds: embeds,
+            embeds: embeds.slice(0, 10),
             content: "<@&1437202276392501369>",
             allowed_mentions: { roles: ["1437202276392501369"] },
           };

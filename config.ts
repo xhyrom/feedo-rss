@@ -194,12 +194,6 @@ export const feeds = [
         "upozorňujeme cestujúcich", "reštauračný vozeň", "výluka"
       ];
 
-      const isTrainInfo = relevantKeywords.some(keyword => 
-        item.contentSnippet?.toLowerCase().includes(keyword.toLowerCase())
-      );
-
-      if (!isTrainInfo) return null;
-
       return {
         description: item.contentSnippet,
         link: item.link,

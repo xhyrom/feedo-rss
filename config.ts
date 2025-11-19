@@ -73,6 +73,29 @@ export const feeds = [
       {
         url: process.env.ZSSK_MIMORIADNE_WEBHOOK,
         payload: (data) => {
+          const getEmbedStatus = (text, isTrainSpecific) => {
+            const lowerText = text.toLowerCase();
+            if (lowerText.includes("odrieknutý")) {
+              return { color: 0xff0000, title: "🔴 Odrieknutý vlak" };
+            }
+            if (lowerText.includes("mešká") || lowerText.includes("meškanie")) {
+              return { color: 0xffa500, title: "🟠 Meškanie vlaku" };
+            }
+            if (
+              lowerText.includes("prerušenie") ||
+              lowerText.includes("prerušená")
+            ) {
+              return { color: 0x8000ff, title: "🟣 Prerušená doprava" };
+            }
+
+            return {
+              color: 0x1da1f2,
+              title: isTrainSpecific
+                ? "🔔 Informácia o vlaku"
+                : "🔔 Informácia",
+            };
+          };
+
           const lines = data.description
             .split("\n")
             .map((l) => l.trim())
@@ -84,8 +107,6 @@ export const feeds = [
 
           const trainLines = [];
           const commonInfoLines = [];
-          const embeds = [];
-
           for (const line of lines) {
             if (trainRegex.test(line)) {
               trainLines.push(line);
@@ -94,54 +115,39 @@ export const feeds = [
             }
           }
 
-          if (trainLines.length === 0 && commonInfoLines.length > 0) {
-            const description = commonInfoLines.join("\n");
-            const allText = description.toLowerCase();
-            let color = 0x1da1f2; // Blue
-            let title = "🔔 Informácia";
+          const embeds = [];
+          const commonInfoText =
+            commonInfoLines.length > 0
+              ? `> ${commonInfoLines.join("\n> ")}`
+              : "";
 
-            if (allText.includes("odrieknutý")) {
-              color = 0xff0000;
-              title = "🔴 Odrieknutý vlak";
-            } else if (allText.includes("mešká")) {
-              color = 0xffa500;
-              title = "🟠 Meškanie vlaku";
-            }
+          const itemsToProcess =
+            trainLines.length > 0
+              ? trainLines
+              : commonInfoLines.length > 0
+                ? [commonInfoLines.join("\n")]
+                : [];
 
-            embeds.push({
-              title,
-              color,
-              description,
+          for (const item of itemsToProcess) {
+            const isTrainLine = trainRegex.test(item);
+            const status = getEmbedStatus(item, isTrainLine);
+
+            const baseEmbed = {
+              ...status,
               url: data.link,
               footer: { text: "ZSSK Mimoriadne • Mastodon" },
               timestamp: data.timestamp.toISOString(),
-            });
-          } else {
-            const commonInfoText =
-              commonInfoLines.length > 0
-                ? `> ${commonInfoLines.join("\n> ")}`
-                : "";
+            };
 
-            for (const trainLine of trainLines) {
-              const match = trainLine.match(trainRegex)!;
+            if (isTrainLine) {
+              const match = item.match(trainRegex)!;
               const trainName = match[1]!.trim();
-              let status = trainLine.substring(match[0].length).trim();
-              if (!status) status = "Očakávajte ďalšie informácie.";
-
-              const fullText = trainLine.toLowerCase();
-              let color = 0x1da1f2;
-              let title = "🔔 Informácia o vlaku";
-
-              if (fullText.includes("odrieknutý")) {
-                color = 0xff0000;
-                title = "🔴 Odrienknutý vlak";
-              } else if (fullText.includes("mešká")) {
-                color = 0xffa500;
-                title = "🟠 Meškanie vlaku";
-              }
+              let statusText =
+                item.substring(match[0].length).trim() ||
+                "Očakávajte ďalšie informácie.";
 
               const fields = [];
-              const delayMatch = status.match(delayRegex);
+              const delayMatch = statusText.match(delayRegex);
 
               if (delayMatch) {
                 fields.push({
@@ -155,7 +161,10 @@ export const feeds = [
                   inline: true,
                 });
 
-                const remainingStatus = status.replace(delayRegex, "").trim();
+                const remainingStatus = statusText
+                  .replace(delayRegex, "")
+                  .trim();
+
                 if (remainingStatus) {
                   fields.push({
                     name: `📝 Stav`,
@@ -171,7 +180,7 @@ export const feeds = [
                 });
                 fields.push({
                   name: `📝 Stav`,
-                  value: status,
+                  value: statusText,
                   inline: false,
                 });
               }
@@ -184,14 +193,9 @@ export const feeds = [
                 });
               }
 
-              embeds.push({
-                title,
-                color,
-                url: data.link,
-                fields,
-                footer: { text: "ZSSK Mimoriadne • Mastodon" },
-                timestamp: data.timestamp.toISOString(),
-              });
+              embeds.push({ ...baseEmbed, fields });
+            } else {
+              embeds.push({ ...baseEmbed, description: item });
             }
           }
 
